@@ -84,8 +84,11 @@ Opponent results for a round stay hidden until you've played that round (`visibl
 
 Commit and push to `main`; GitHub Pages redeploys in about a minute
 (`curl -s https://api.github.com/repos/axthomsen/quiz-duel/actions/runs?per_page=1` shows status).
-Phones pick up changes on their next launch (network-first service worker). Firestore rule changes must be
-pasted into the Firebase console by the owner.
+Phones pick up changes on their next launch (network-first service worker, which revalidates every file
+so phones don't mix old and new files). Firestore rule changes must be pasted into the Firebase console by the owner.
+
+After deploying, open https://axthomsen.github.io/quiz-duel/dev/check.html. GitHub's CDN and the browser cache
+files for up to 10 minutes (`max-age=600`), so a check run right after the deploy can briefly see old files.
 
 ## Constraints
 

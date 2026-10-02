@@ -2,7 +2,7 @@
 // and the app still opens when the phone is offline.
 // Bump CACHE whenever this list changes. Must match the categories in questions.js
 // (dev/check.html verifies this).
-const CACHE = 'quizduel-v3';
+const CACHE = 'quizduel-v4';
 const CATEGORY_FILES = [
   'geo', 'hist', 'sci', 'nature', 'sport', 'film', 'music', 'food', 'arts', 'tech', 'space', 'body',
   'myth', 'words', 'games', 'math', 'landmarks', 'capitals', 'heroes', 'earth', 'invent',
@@ -27,7 +27,10 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    // 'no-cache' revalidates with the server instead of trusting the browser's HTTP cache
+    // (GitHub Pages sends max-age=600), so right after a deploy a phone never mixes old and
+    // new question files.
+    fetch(e.request.url, { cache: 'no-cache', credentials: 'same-origin' })
       .then(res => {
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy));
