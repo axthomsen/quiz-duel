@@ -1,10 +1,10 @@
-// Storage backend. Uses Firebase (Firestore + anonymous auth) once firebase-config.js is
-// filled in; until then a localStorage "demo" backend shared by the tabs of one browser.
-// Both expose the same small API, used by app.js.
+// Storage backend. Uses Firebase (Firestore + anonymous auth) when firebase-config.js is
+// filled in; otherwise, or when the URL has ?demo, a localStorage "demo" backend shared by
+// the tabs of one browser. Both expose the same small API, used by app.js.
 
 import { firebaseConfig } from './firebase-config.js';
 
-export const isDemo = !firebaseConfig?.apiKey;
+export const isDemo = !firebaseConfig?.apiKey || new URLSearchParams(location.search).has('demo');
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const ID_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';

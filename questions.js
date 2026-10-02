@@ -25,6 +25,11 @@ import capitals from './questions/capitals.js';
 import heroes from './questions/heroes.js';
 import earth from './questions/earth.js';
 import invent from './questions/invent.js';
+import dino from './questions/dino.js';
+import ocean from './questions/ocean.js';
+import board from './questions/board.js';
+import transport from './questions/transport.js';
+import money from './questions/money.js';
 
 export const CATEGORIES = [
   { id: 'geo', name: 'Geography', icon: '🌍', color: '#1fa971' },
@@ -48,9 +53,15 @@ export const CATEGORIES = [
   { id: 'heroes', name: 'Comics & Superheroes', icon: '🦸', color: '#ff006e' },
   { id: 'earth', name: 'Planet Earth', icon: '🌋', color: '#588157' },
   { id: 'invent', name: 'Inventions', icon: '💡', color: '#c9a227' },
+  { id: 'dino', name: 'Dinosaurs & Prehistory', icon: '🦖', color: '#8a6f3c' },
+  { id: 'ocean', name: 'Ocean Life', icon: '🐠', color: '#0081a7' },
+  { id: 'board', name: 'Board & Card Games', icon: '🎲', color: '#6d597a' },
+  { id: 'transport', name: 'Cars & Transport', icon: '🚗', color: '#457b9d' },
+  { id: 'money', name: 'Money & Business', icon: '💰', color: '#2d6a4f' },
 ];
 
 export const QUESTIONS = {
   geo, hist, sci, nature, sport, film, music, food, arts, tech, space, body,
   myth, words, games, math, landmarks, capitals, heroes, earth, invent,
+  dino, ocean, board, transport, money,
 };

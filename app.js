@@ -113,7 +113,7 @@ function catChip(catId) {
 
 function banners() {
   let out = '';
-  if (isDemo) out += `<div class="banner">Demo mode: games are saved in this browser only. Open a second tab to play against yourself. See README to go online.</div>`;
+  if (isDemo) out += `<div class="banner">Demo mode: games are saved in this browser only, never online. Open a second tab to play against yourself.</div>`;
   const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
   if (ios && !navigator.standalone) out += `<div class="banner tip">📲 Install it: tap <b>Share</b> then <b>Add to Home Screen</b>. Your player code (in your profile) logs you back in there.</div>`;
   return out;

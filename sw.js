@@ -1,9 +1,12 @@
 // Network first, cache as a fallback: updates show up on the next launch,
 // and the app still opens when the phone is offline.
-const CACHE = 'quizduel-v2';
+// Bump CACHE whenever this list changes. Must match the categories in questions.js
+// (dev/check.html verifies this).
+const CACHE = 'quizduel-v3';
 const CATEGORY_FILES = [
   'geo', 'hist', 'sci', 'nature', 'sport', 'film', 'music', 'food', 'arts', 'tech', 'space', 'body',
   'myth', 'words', 'games', 'math', 'landmarks', 'capitals', 'heroes', 'earth', 'invent',
+  'dino', 'ocean', 'board', 'transport', 'money',
 ].map(id => `questions/${id}.js`);
 const SHELL = [
   './', 'index.html', 'styles.css', 'app.js', 'logic.js', 'store.js', 'questions.js', ...CATEGORY_FILES,

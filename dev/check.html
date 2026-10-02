@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Quiz Duel checks</title>
+  <style>
+    :root { --bg: #fff; --text: #1d1647; --muted: #666; --ok: #1f9a54; --bad: #c7393d; --warn: #b7791f; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #17123a; --text: #fff; --muted: #b8b1e8; --ok: #2ecc71; --bad: #ff6b6f; --warn: #f6c05c; } }
+    body { margin: 0; padding: 16px; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, sans-serif; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    #summary { font-weight: 700; margin: 8px 0 16px; }
+    h2 { font-size: 15px; margin: 18px 0 6px; }
+    li { margin: 2px 0; }
+    .ok { color: var(--ok); } .fail { color: var(--bad); } .warn { color: var(--warn); } .muted { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <h1>Quiz Duel checks</h1>
+  <p class="muted">Validates the question bank, compares it with the live site, simulates games and checks the offline cache list.
+    Results are also in <code>window.checkResult</code>.</p>
+  <div id="summary">Running…</div>
+  <div id="out"></div>
+
+<script type="module">
+import { CATEGORIES, QUESTIONS } from '../questions.js';
+import * as G from '../logic.js';
+import { applyPatch } from '../store.js';
+
+const LIVE = 'https://axthomsen.github.io/quiz-duel/';
+const failures = [], warnings = [], sections = [];
+let current;
+const section = title => { current = { title, items: [] }; sections.push(current); };
+const ok = msg => current.items.push(['ok', msg]);
+const fail = msg => { current.items.push(['fail', msg]); failures.push(`${current.title}: ${msg}`); };
+const warn = msg => { current.items.push(['warn', msg]); warnings.push(`${current.title}: ${msg}`); };
+
+// ---------- 1. Question bank ----------
+section('Question bank');
+{
+  const ids = CATEGORIES.map(c => c.id);
+  if (new Set(ids).size !== ids.length) fail('Duplicate category ids');
+  for (const c of CATEGORIES) {
+    if (!c.name || !c.icon || !/^#[0-9a-f]{6}$/i.test(c.color)) fail(`Category ${c.id} needs name, icon and #rrggbb color`);
+    if (!Array.isArray(QUESTIONS[c.id])) fail(`Category ${c.id} has no questions file`);
+    else if (QUESTIONS[c.id].length < 9) fail(`Category ${c.id} has only ${QUESTIONS[c.id].length} questions (a game can need 9 from one category)`);
+  }
+  for (const k of Object.keys(QUESTIONS)) if (!ids.includes(k)) fail(`QUESTIONS.${k} has no entry in CATEGORIES`);
+
+  const seen = new Map();
+  let total = 0;
+  for (const [cat, list] of Object.entries(QUESTIONS)) {
+    list.forEach((q, i) => {
+      total++;
+      const id = `${cat}-${i}`;
+      if (!Array.isArray(q) || q.length !== 6) return fail(`${id}: needs exactly 6 strings [question, right, wrong×3, explanation]`);
+      if (q.some(s => typeof s !== 'string' || !s.trim())) return fail(`${id}: empty or non-string field`);
+      if (q.some(s => s !== s.trim())) warn(`${id}: leading/trailing spaces`);
+      const answers = q.slice(1, 5).map(a => a.toLowerCase());
+      if (new Set(answers).size !== 4) fail(`${id}: answers must all be different`);
+      if (q[5].length < 25) warn(`${id}: explanation looks too short`);
+      if (q[5].length > 260) warn(`${id}: explanation is long (${q[5].length} chars) for a phone screen`);
+      if (q[0].length > 160) warn(`${id}: question is long (${q[0].length} chars)`);
+      const key = q[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (seen.has(key)) fail(`${id}: same question as ${seen.get(key)}`);
+      else seen.set(key, id);
+    });
+  }
+  ok(`${total} questions in ${CATEGORIES.length} categories`);
+}
+
+// ---------- 2. Compare with the live site (append-only rule) ----------
+section('Live site comparison (append-only rule)');
+try {
+  const live = await import(`${LIVE}questions.js?v=${Date.now()}`);
+  let shrunk = 0, changed = 0, added = 0;
+  for (const [cat, liveList] of Object.entries(live.QUESTIONS)) {
+    const local = QUESTIONS[cat];
+    if (!local) { fail(`Category "${cat}" exists live but was removed locally — old games use it`); continue; }
+    if (local.length < liveList.length) { fail(`${cat}: ${liveList.length - local.length} live question(s) deleted — never delete, only append`); shrunk++; }
+    liveList.forEach((q, i) => {
+      const l = local[i];
+      if (!l) return;
+      if (l[0] !== q[0] || l[1] !== q[1]) { changed++; fail(`${cat}-${i}: question or right answer differs from live — was something inserted or reordered?`); }
+    });
+    added += Math.max(0, local.length - liveList.length);
+  }
+  const newCats = CATEGORIES.filter(c => !live.QUESTIONS[c.id]).map(c => c.id);
+  if (!shrunk && !changed) ok(`No live questions moved or removed. ${added} new question(s) in existing categories${newCats.length ? `, new categories: ${newCats.join(', ')}` : ''}.`);
+} catch (err) {
+  warn(`Couldn't load the live site (${err.message}). Skipped — check the git diff instead.`);
+}
+
+// ---------- 3. Game logic simulation ----------
+section('Game logic');
+{
+  const runGame = (seed) => {
+    const [a, b] = ['playerA', 'playerB'];
+    let g = G.newGame(a, b, { [a]: 'A', [b]: 'B' });
+    const picks = [];
+    for (let turn = 0; turn < 20 && g.status === 'active'; turn++) {
+      const me = g.turn;
+      for (let step = 0; step < 10; step++) {
+        const s = G.nextStep(g, me);
+        if (s === 'pick') {
+          const ri = Math.floor(G.answersOf(g, me).length / 3);
+          const r = g.rounds[ri];
+          if (r.chooser !== me) throw new Error(`round ${ri + 1} chooser mismatch`);
+          if (r.options.length !== 3 || new Set(r.options).size !== 3) throw new Error('needs 3 distinct category options');
+          const cat = r.options[(seed + ri) % 3];
+          const q = G.pickQuestions(cat, g, new Set());
+          if (q.length !== 3) throw new Error(`only ${q.length} questions picked for ${cat}`);
+          picks.push(me);
+          g = applyPatch(g, { rounds: g.rounds.map((x, i) => i === ri ? { ...x, category: cat, q } : x) });
+        } else if (s === 'play') {
+          const mine = [...G.answersOf(g, me), (seed + step) % 4];
+          let patch = { [`answers.${me}`]: mine };
+          if (mine.length % 3 === 0) patch = { ...patch, ...(G.settlePatch(applyPatch(g, patch), me) || {}) };
+          g = applyPatch(g, patch);
+        } else break;
+      }
+    }
+    return { g, picks };
+  };
+
+  let problems = 0;
+  for (let seed = 0; seed < 25; seed++) {
+    try {
+      const { g, picks } = runGame(seed);
+      const [a, b] = g.players;
+      if (g.status !== 'finished') throw new Error('game did not finish');
+      if (g.rounds.length !== G.ROUNDS) throw new Error(`${g.rounds.length} rounds instead of ${G.ROUNDS}`);
+      if (G.answersOf(g, a).length !== 18 || G.answersOf(g, b).length !== 18) throw new Error('each player needs 18 answers');
+      if (picks.join() !== [a, b, a, b, a, b].join()) throw new Error(`pick order ${picks.join()}`);
+      const allQ = g.rounds.flatMap(r => r.q);
+      if (new Set(allQ).size !== 18) throw new Error('a question repeated within the game');
+      const sa = G.correctCount(G.answersOf(g, a)), sb = G.correctCount(G.answersOf(g, b));
+      const expected = sa === sb ? null : sa > sb ? a : b;
+      if (g.winner !== expected) throw new Error('wrong winner');
+    } catch (err) { problems++; fail(`Simulated game ${seed}: ${err.message}`); }
+  }
+  if (!problems) ok('25 simulated games: correct turn order, 6 rounds, 18 unique questions, right winner');
+
+  // Hidden opponent results: during a game you only see rounds you have played.
+  const g = applyPatch(G.newGame('a', 'b', {}), { 'answers.a': [0, 0, 0], 'answers.b': [0, 1, 2, 0, 0, 0] });
+  const vis = G.visibleOpponentAnswers(g, 'a');
+  if (vis.length === 3) ok('Opponent answers for unplayed rounds stay hidden');
+  else fail(`visibleOpponentAnswers showed ${vis.length} answers, expected 3`);
+}
+
+// ---------- 4. Offline cache list ----------
+section('Service worker cache list');
+try {
+  const sw = await (await fetch('../sw.js', { cache: 'no-store' })).text();
+  const missing = CATEGORIES.filter(c => !new RegExp(`'${c.id}'`).test(sw)).map(c => c.id);
+  if (missing.length) fail(`sw.js CATEGORY_FILES is missing: ${missing.join(', ')} (and bump CACHE)`);
+  else ok('Every category file is in the offline cache list');
+} catch (err) { warn(`Couldn't read sw.js: ${err.message}`); }
+
+// ---------- report ----------
+const out = document.getElementById('out');
+out.innerHTML = sections.map(s => `<h2>${s.title}</h2><ul>${s.items.map(([k, m]) =>
+  `<li class="${k}">${k === 'ok' ? '✓' : k === 'fail' ? '✗' : '!'} ${m.replace(/</g, '&lt;')}</li>`).join('')}</ul>`).join('');
+const summary = document.getElementById('summary');
+summary.className = failures.length ? 'fail' : 'ok';
+summary.textContent = failures.length ? `${failures.length} problem(s) to fix` : `All checks passed${warnings.length ? ` (${warnings.length} warning(s))` : ''}`;
+window.checkResult = { ok: !failures.length, failures, warnings };
+</script>
+</body>
+</html>
